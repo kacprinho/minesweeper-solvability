@@ -109,7 +109,7 @@ class TestReveal(unittest.TestCase):
     def test_reveal_first_click_flood_fills(self):
         rng = random.Random(10)
         b = Board(5, 5, 1, rng=rng)
-        # One mine at far corner — center should be all zeros
+        # One mine at far corner, center should be all zeros
         b.reveal(2, 2)
         # Flood-fill should reveal a large region from center
         self.assertGreater(b.revealed_count, 1)
@@ -126,7 +126,7 @@ class TestReveal(unittest.TestCase):
     def test_reveal_mine_returns_false(self):
         rng = random.Random(12)
         b = Board(5, 5, 10, rng=rng)
-        b.reveal(0, 0)  # generates board
+        b.reveal(0, 0)  
         # Find a mine to click
         mine_found = False
         for r in range(5):
@@ -227,7 +227,7 @@ class TestUnrevealedNeighbors(unittest.TestCase):
     def test_corner_has_3_neighbors(self):
         b = Board(5, 5, 0)
         b.reveal(0, 0)
-        # After flood-fill, all are revealed
+        # After flood fill, all are revealed
         self.assertEqual(len(b.unrevealed_neighbors(0, 0)), 0)
 
     def test_unrevealed_count_before_reveal(self):

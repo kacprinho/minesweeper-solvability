@@ -109,7 +109,8 @@ class Board:
     # ------------------------------------------------------------------
 
     def reveal(self, row: int, col: int) -> bool:
-        """Reveal a cell. Returns False if the cell is a mine (game over).
+        """
+        Reveal a cell. Returns False if the cell is a mine (game over).
 
         On the very first call the board is generated with this cell
         guaranteed to be a zero-cell.
@@ -269,3 +270,23 @@ class Board:
                 for nr, nc in self._adj[r][c]
             )
         ]
+
+def print_board(board: Board, show_mines: bool = False):
+    """Print the board state in a user-friendly format."""
+    header = "    " + "  ".join(str(c) for c in range(board.cols))
+    print(header)
+    print("    " + "---" * board.cols)
+    for r in range(board.rows):
+        row_str = f"{r:>2} |"
+        for c in range(board.cols):
+            v = board.player_value(r, c)
+            if v == KNOWN_MINE:
+                row_str += " * "
+            elif v == HIDDEN:
+                if show_mines and board.is_mine(r, c):
+                    row_str += " M "
+                else:
+                    row_str += " . "
+            else:
+                row_str += f" {v} "
+        print(row_str)
