@@ -389,20 +389,10 @@ class TestFrontier(unittest.TestCase):
         f = b.frontier()
         self.assertGreater(len(f), 0)
         for r, c in f:
-            self.assertTrue(b.is_hidden(r, c))
+            self.assertTrue(b.is_revealed(r, c))
             self.assertTrue(
-                any(b.is_revealed(nr, nc) for nr, nc in b.neighbors(r, c))
+                any(b.is_hidden(nr, nc) for nr, nc in b.neighbors(r, c))
             )
-
-    def test_frontier_excludes_known_mines(self):
-        rng = random.Random(84)
-        b = Board(9, 9, 10, rng=rng)
-        b.reveal(4, 4)
-        f = b.frontier()
-        if f:
-            b.mark_known_mine(f[0][0], f[0][1])
-            f2 = b.frontier()
-            self.assertNotIn(f[0], f2)
 
     def test_frontier_empty_after_full_flood(self):
         b = Board(5, 5, 0)

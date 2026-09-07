@@ -264,9 +264,9 @@ class Board:
             (r, c)
             for r in range(self._rows)
             for c in range(self._cols)
-            if self._player_grid[r][c] == HIDDEN
+            if self._player_grid[r][c] >= 0
             and any(
-                self._player_grid[nr][nc] >= 0
+                self._player_grid[nr][nc] == HIDDEN
                 for nr, nc in self._adj[r][c]
             )
         ]
