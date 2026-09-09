@@ -283,10 +283,7 @@ def print_board(board: Board, show_mines: bool = False):
             if v == KNOWN_MINE:
                 row_str += " * "
             elif v == HIDDEN:
-                if show_mines and board.is_mine(r, c):
-                    row_str += " M "
-                else:
-                    row_str += " . "
+                row_str += " . "
             else:
                 row_str += f" {v} "
         print(row_str)
