@@ -77,7 +77,7 @@ The outline of what we are going to do in this project is as follows:
 - **Optimal play**: Complete all possible forced moves, then at each guess point, choose the cell with the lowest computed mine probability (in guesses with equal probability, choose randomly)
 - **Aggregate**: A statistic combined/summarized across many simulated boards (e.g. "average win rate across 10,000 games"), as opposed to a single board's result
 - **Adjacent**: If two mines are touching in any way (up, down, left, right or diagonally), they are adjacent
-- **Frontier**: A frontier cell is any hidden, unrevealed cell that sits directly next to an already revealed, numbered cell
+- **Frontier**: A frontier cell is any revealed number cell that has at least one unrevealed neighbour cell.
 - **Component**: A chunk of cells which can be focused on separately from the board, but not necessarily *independently* (clarified in below section)
 
 ## 5. Some clarifications
