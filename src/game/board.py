@@ -8,6 +8,7 @@ DIRECTIONS = [
     ( 0, -1),          ( 0, 1),
     ( 1, -1), ( 1, 0), ( 1, 1),
 ]
+
 HIDDEN = -2
 KNOWN_MINE = -1
 
@@ -22,9 +23,9 @@ class Board:
     """Minesweeper board representation and core operations.
 
     Two-grid architecture:
-      _mine_grid:  bool grid — ground truth mine locations
-      _player_grid: int grid — everything the solver/player sees:
-          -2 = unrevealed, -1 = known mine (solver flagged), 0-8 = revealed
+      _mine_grid:  bool grid — real mine locations
+      _player_grid: int grid — represents what the player would see:
+          -2 = unrevealed, -1 = known mine (flagged by the solver), 0-8 = revealed
     """
     # ------------------------------------------------------------------
     # Board Setup
@@ -78,10 +79,13 @@ class Board:
 
     def _generate(self, safe_row: int, safe_col: int) -> None:
         """Place mines uniformly at random, excluding the safe zone."""
+
+        # Define safe zone as the clicked cell and its neighbors
         safe: set[tuple[int, int]] = {(safe_row, safe_col)}
         for nr, nc in self._adj[safe_row][safe_col]:
             safe.add((nr, nc))
 
+        # All mines can be placed in cells not in the safe zone
         candidates = [
             (r, c)
             for r in range(self._rows)
@@ -89,10 +93,12 @@ class Board:
             if (r, c) not in safe
         ]
 
+        # Randomly shuffle candidates and place mines in the first mine_count cells
         self._rng.shuffle(candidates)
         for r, c in candidates[: self._mine_count]:
             self._mine_grid[r][c] = True
 
+        # Compute adjacency counts for all cells
         for r in range(self._rows):
             for c in range(self._cols):
                 if self._mine_grid[r][c]:
@@ -115,19 +121,24 @@ class Board:
         On the very first call the board is generated with this cell
         guaranteed to be a zero-cell.
         """
+        # Check if the cell is in bounds
         if not (0 <= row < self._rows and 0 <= col < self._cols):
             raise IndexError(f"({row}, {col}) out of bounds")
 
+        # Check if the game is already over
         if self._game_state != GameState.ONGOING:
             raise RuntimeError("Cannot reveal after game is over")
 
+        # Check if its the first click, if so generate the board
         if not self._generated:
             self._generate(row, col)
 
+        # Check if its a mine, if so the game has been lost
         elif self._mine_grid[row][col]:
             self._game_state = GameState.LOST
             return False
 
+        # Check if the cell is already revealed
         if self._player_grid[row][col] != HIDDEN:
             return True
 
@@ -135,7 +146,7 @@ class Board:
         self._player_grid[row][col] = self._adj_counts[row][col]
         self._revealed_count += 1
 
-        # BFS flood-fill for zero-cells
+        # BFS flood-fill for zero-cells using a queue
         if self._adj_counts[row][col] == 0:
             queue: deque[tuple[int, int]] = deque()
             queue.append((row, col))
@@ -143,13 +154,16 @@ class Board:
             while queue:
                 r, c = queue.popleft()
                 if self._adj_counts[r][c] == 0:
+                    # Reveal all hidden neighbors
                     for nr, nc in self._adj[r][c]:
                         if self._player_grid[nr][nc] == HIDDEN:
                             self._player_grid[nr][nc] = self._adj_counts[nr][nc]
                             self._revealed_count += 1
+                            # If the neighbor is also a zero-cell, add it to the queue
                             if self._adj_counts[nr][nc] == 0:
                                 queue.append((nr, nc))
 
+        # Check if the game has been won
         if self._revealed_count == self._rows * self._cols - self._mine_count:
             self._game_state = GameState.WON
         return True
@@ -160,12 +174,20 @@ class Board:
 
     def mark_known_mine(self, row: int, col: int) -> None:
         """Mark a cell as a known mine (solver use only)."""
+
+        # Check if the cell is in bounds
         if not (0 <= row < self._rows and 0 <= col < self._cols):
             raise IndexError(f"({row}, {col}) out of bounds")
+
+        # Check if the cell is already revealed
         if self._player_grid[row][col] != HIDDEN:
             raise ValueError(f"Cell ({row}, {col}) is not hidden")
+
+        # Check if the cell is already marked as a known mine
         if (row, col) in self._known_mines:
             raise ValueError(f"Cell ({row}, {col}) is already marked as known mine")
+
+        # Mark the cell as a known mine
         self._player_grid[row][col] = KNOWN_MINE
         self._known_mines.add((row, col))
 
@@ -223,26 +245,18 @@ class Board:
         return self._player_grid[row][col] == HIDDEN
 
     def player_value(self, row: int, col: int) -> int:
-        """Raw value of the player grid at (row, col)."""
         return self._player_grid[row][col]
 
     def neighbors(self, row: int, col: int) -> list[tuple[int, int]]:
         return list(self._adj[row][col])
-
-    def adj_mines_num(self, row: int, col: int) -> int:
-        """Adjacent mine count. Raises ValueError if cell is not revealed."""
-        if self._player_grid[row][col] < 0:
-            raise ValueError("Cell must be revealed to query adjacent mines")
-        return self._adj_counts[row][col]
-
+    
     def adj_remaining_mines(self, row: int, col: int) -> int:
-        """Mines adjacent to (row, col) that are not yet marked known."""
+        # Count the number of adjacent mines that are not yet marked as known mines
         return self._adj_counts[row][col] - sum(
             1 for nr, nc in self._adj[row][col] if (nr, nc) in self._known_mines
         )
 
     def remaining_total_mines(self) -> int:
-        """Total number of unknown mines remaining on the board."""
         return self._mine_count - len(self._known_mines)
 
     def unrevealed_neighbors(self, row: int, col: int) -> list[tuple[int, int]]:
@@ -254,12 +268,13 @@ class Board:
 
     def count_unrevealed_neighbors(self, row: int, col: int) -> int:
         return sum(
-            1 for nr, nc in self._adj[row][col]
+            1 
+            for nr, nc in self._adj[row][col]
             if self._player_grid[nr][nc] == HIDDEN
         )
 
     def frontier(self) -> list[tuple[int, int]]:
-        """All hidden cells adjacent to at least one revealed cell."""
+        # All revealed cells adjacent to at least one hidden cell
         return [
             (r, c)
             for r in range(self._rows)
@@ -271,8 +286,13 @@ class Board:
             )
         ]
 
+
+# ------------------------------------------------------------------
+# Utility functions
+# ------------------------------------------------------------------
+
+# For debugging and visualization purposes
 def print_board(board: Board, show_mines: bool = False):
-    """Print the board state in a user-friendly format."""
     header = "    " + "  ".join(str(c) for c in range(board.cols))
     print(header)
     print("    " + "---" * board.cols)

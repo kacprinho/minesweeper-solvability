@@ -154,6 +154,17 @@ class TestSolve(unittest.TestCase):
 
         self.assertEqual(result, "won")
 
+    def test_solve_survives_board_winning_mid_pass(self):
+        # A board that is already won, but the solver doesn't know it yet. The solver
+        # should not crash or loop infinitely, and should return "won".
+        b = Board(8, 8, 12, rng=random.Random(5017))
+        b.reveal(4, 4)
+
+        s = Solver()
+        result = s.solve(b)
+
+        self.assertEqual(result, "won")
+
 
 if __name__ == "__main__":
     unittest.main()
