@@ -41,7 +41,7 @@ The outline of what we are going to do in this project is as follows:
     - Generate a board and use the deduction solver to get to an ambiguous point in the board
     - Randomise the first click so we get an even sample of starts
     - Log statistics for each decision point as raw data
-    - Run a stochastic overlay which simulates guessing the lowest probability cell at each point to represent a normal user trying to complete the board
+    - Guess the lowest probability cell at each point to represent a normal user trying to complete the board
     - Log the results for each board as raw data
     - Repeat for numerous boards and run in parallel to save time
 - **Initial EDA:**
