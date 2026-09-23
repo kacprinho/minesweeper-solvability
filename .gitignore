@@ -12,9 +12,6 @@ build/
 venv/
 env/
 
-# Jupyter
-.ipynb_checkpoints/
-
 # Testing / coverage
 .pytest_cache/
 .coverage
@@ -22,4 +19,6 @@ htmlcov/
 
 # IDEs
 .vscode/
-.idea/
+
+# Simulation output
+data/raw/

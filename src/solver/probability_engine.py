@@ -50,7 +50,7 @@ class ProbabilityEngine:
                 moved = True
         return moved
 
-    def best_guess(self, board: Board) -> tuple[int, int]:
+    def best_guess(self, board: Board) -> tuple[tuple[int, int], float] | None:
         """
         Return the hidden cell with the lowest probability of being a mine.
 
@@ -58,8 +58,10 @@ class ProbabilityEngine:
         arbitrarily. If no hidden cells remain, raises ValueError.
         """
         probabilities = self.probabilities(board)
+        if not probabilities:
+            return None
         best_cell = min(probabilities, key=probabilities.get)
-        return best_cell
+        return best_cell, probabilities[best_cell]
 
     def _mine_weights(self, board: Board) -> dict[tuple[int, int], tuple[int, int]]:
         """
@@ -192,6 +194,7 @@ class ProbabilityEngine:
         This essentially works by grouping every hidden cell that appears together in at least one constraint, 
         then collecting all constraints touching any of those cells into the same component.
         """
+
         parent = {}
 
         # Returns the root of the union-find tree for x, creating a new root if x is not yet in the structure. 
@@ -253,7 +256,7 @@ class ProbabilityEngine:
                 for cell_set, remaining in entry["cons"]
             ]
             components.append((cells, local_cons))
-
+            
         return components
 
     # ------------------------------------------------------------------
@@ -271,88 +274,127 @@ class ProbabilityEngine:
         Returns:
             size_dist: list which represents the number of valid placements using t mines, where size_dist[t] = count
             ones: {cell: list} where ones[cell][t] = placements using t mines
-                  in which that cell holds a mine
+                in which that cell holds a mine
         """
         num_cells = len(cells)
         num_constraints = len(cons)
 
-        # Record which constraints each cell participates in, so we can
-        # later reorder cells by how constrained they are.
+        # Record which constraints each cell participates in, and each
+        # constraint's own cell list, so the search can look either up.
         cell_constraints = [[] for _ in range(num_cells)]
+        constraint_cells = [idxs for idxs, _ in cons]
         constraint_targets = [c for _, c in cons]
         for c, (idxs, _) in enumerate(cons):
             for idx in idxs:
                 cell_constraints[idx].append(c)
 
-        # Reorder cells so the most constrained ones (touching the most
-        # constraints) get decided first
-        order = sorted(range(num_cells), key=lambda v: (-len(cell_constraints[v]), v))
-        new_position_of = {old: new for new, old in enumerate(order)}
-        cons_reordered = [
-            (tuple(sorted(new_position_of[i] for i in idxs)), r)
-            for idxs, r in cons
-        ]
-
-        # Rebuild cell_constraints against the new ordering, and precompute,
-        # for every constraint and every decision depth v, how many of that
-        # constraint's cells are still undecided once cells 0..v-1 are
-        # assigned. This lets the search reject impossible branches instantly.
-        cell_constraints = [[] for _ in range(num_cells)]
-        undecided_count_at_depth = []
-        for c, (idxs, r) in enumerate(cons_reordered):
-            suffix_counts = [0] * (num_cells + 1)
-            j = 0
-            for v in range(num_cells):
-                while j < len(idxs) and idxs[j] < v:
-                    j += 1
-                suffix_counts[v] = len(idxs) - j
-            undecided_count_at_depth.append(suffix_counts)
-            for idx in idxs:
-                cell_constraints[idx].append(c)
-
         size_dist = [0] * (num_cells + 1)
         ones = {cell: [0] * (num_cells + 1) for cell in cells}
-        assignment = [0] * num_cells
+        assignment = [None] * num_cells
         mines_used_per_constraint = [0] * num_constraints
 
-        def search(v):
-            if v == num_cells:
-                # All cells decided — verify every constraint is
+        # Unlike a fixed reorder computed once, this tracks how many
+        # of each constraint's cells are still undecided AT THE CURRENT POINT
+        # in the search, updated as cells get assigned/unassigned. This lets
+        # us always branch next on whichever constraint is closest to being
+        # fully decided (MRV), rather than committing to one order in advance.
+        undecided_count = [len(idxs) for idxs in constraint_cells]
+
+        def pick_next_cell():
+            # MRV: choose the active constraint with the fewest undecided
+            # cells remaining, and branch on one of its unassigned cells.
+            best_c = -1
+            for c in range(num_constraints):
+                if undecided_count[c] == 0:
+                    continue
+                if best_c == -1 or undecided_count[c] < undecided_count[best_c]:
+                    best_c = c
+            if best_c == -1:
+                # No constraint has undecided cells left; fall back to any
+                # still unassigned cell (can happen for cells with no
+                # remaining active constraint touching them).
+                for v in range(num_cells):
+                    if assignment[v] is None:
+                        return v
+                return None
+            for v in constraint_cells[best_c]:
+                if assignment[v] is None:
+                    return v
+            return None
+
+        def search(num_assigned):
+            if num_assigned == num_cells:
+                # All cells decided, verify every constraint is
                 # exactly satisfied (earlier pruning only ruled out
                 # impossible branches, it doesn't guarantee equality).
                 for c in range(num_constraints):
                     if mines_used_per_constraint[c] != constraint_targets[c]:
                         return
-                total_mines = sum(assignment)
+                total_mines = sum(1 for value in assignment if value)
                 size_dist[total_mines] += 1
                 for i in range(num_cells):
                     if assignment[i]:
-                        # order[i] maps the search's reordered position
-                        # back to the original cell index.
-                        ones[cells[order[i]]][total_mines] += 1
+                        ones[cells[i]][total_mines] += 1
                 return
 
-            # Reject early if any constraint is already broken, or
-            # can no longer possibly be satisfied even in the best case.
-            for c in range(num_constraints):
-                if mines_used_per_constraint[c] > constraint_targets[c]:
-                    return
-                if mines_used_per_constraint[c] + undecided_count_at_depth[c][v] < constraint_targets[c]:
-                    return
+            v = pick_next_cell()
+            touched = cell_constraints[v]
 
             # Try this cell as safe (0) then as a mine (1).
             for value in (0, 1):
                 assignment[v] = value
-                if value:
-                    for c in cell_constraints[v]:
+                for c in touched:
+                    undecided_count[c] -= 1
+                    if value:
                         mines_used_per_constraint[c] += 1
-                search(v + 1)
-                if value:
-                    for c in cell_constraints[v]:
+
+                # Reject early if any touched constraint is already broken, or
+                # can no longer possibly be satisfied even in the best case.
+                ok = True
+                for c in touched:
+                    if mines_used_per_constraint[c] > constraint_targets[c]:
+                        ok = False
+                        break
+                    if mines_used_per_constraint[c] + undecided_count[c] < constraint_targets[c]:
+                        ok = False
+                        break
+                if ok:
+                    search(num_assigned + 1)
+
+                for c in touched:
+                    if value:
                         mines_used_per_constraint[c] -= 1
+                    undecided_count[c] += 1
+                assignment[v] = None
 
         search(0)
         return size_dist, ones
+
+
+    # ------------------------------------------------------------------
+    # Simulation helpers
+    # ------------------------------------------------------------------
+
+    def component_size(self, board: Board, cell: tuple[int, int]) -> int:
+        """
+        Return the size of the connected component of hidden cells that the given cell belongs to.
+        """
+        components = self._components(board)
+        for cells, _ in components:
+            if cell in cells:
+                return len(cells)
+        return 0
+
+    def num_valid_configs(self, board: Board, cell: tuple[int, int]) -> int:
+        """
+        Return the number of valid configurations of mines in the connected component of hidden cells that the given cell belongs to.
+        """
+        components = self._components(board)
+        for cells, cons in components:
+            if cell in cells:
+                size_dist, _ = self._enumerate_component(cells, cons)
+                return sum(size_dist)
+        return 0
 
     # ------------------------------------------------------------------
     # Arithmetic helpers
